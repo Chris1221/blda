@@ -31,6 +31,7 @@ if not os.path.isfile("../data/C1.bam"):
     bl.pb.pb_bam("../data/BuenMerged.more150.bam", mapping, output_prefix="../data")
 
     for cluster in mapping.keys():
+        os.system(f"samtools index ../data/{cluster}.bam")
         os.system(f"macs2 callpeak -n {cluster} --format BAMPE -g hs -q 0.001 --treatment ../data/{cluster}.bam -B --outdir ../data/peaks/{cluster}/")
 # %%
 
