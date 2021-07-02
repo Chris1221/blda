@@ -9,6 +9,8 @@
 import pandas as pd
 import yaml
 import pysam as ps
+import os 
+import os.path
 # %%
 
 data = pd.read_csv("../data/test2.csv")
@@ -25,10 +27,19 @@ with open("../data/mapping.yaml", 'w') as out:
 # %%
 import bulk_lda as bl
 
-bl.pb.pb_bam("../data/BuenMerged.more150.bam", mapping, output_prefix="../data")
-# %% 
-# Do some simple peak calling on the bam files
-# Construct the calls
-for cluster in mapping.keys():
-    os.system(f"macs2 callpeak -n {cluster} --format BAMPE -g hs -q 0.001 --treatment ../data/{cluster}.bam -B --outdir ../data/peaks/{cluster}/")
+if not os.path.isfile("../data/C1.bam"):
+    bl.pb.pb_bam("../data/BuenMerged.more150.bam", mapping, output_prefix="../data")
+
+    for cluster in mapping.keys():
+        os.system(f"macs2 callpeak -n {cluster} --format BAMPE -g hs -q 0.001 --treatment ../data/{cluster}.bam -B --outdir ../data/peaks/{cluster}/")
+# %%
+
+blah = {
+    '../data/peaks/C1/C1_peaks.narrowPeak': "../data/C1.bam",
+    '../data/peaks/C2/C2_peaks.narrowPeak': "../data/C2.bam",
+    '../data/peaks/C3/C3_peaks.narrowPeak': "../data/C3.bam",
+    '../data/peaks/C4/C4_peaks.narrowPeak': "../data/C4.bam",
+}
+
+bl.cm.make_count_matrix(blah, output = "blah")
 # %%
