@@ -44,3 +44,4 @@ blah = {
 
 bl.cm.make_count_matrix(blah, output = "blah")
 # %%
+bl.ct.run_cistopic("blah")

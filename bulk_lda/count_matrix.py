@@ -7,7 +7,7 @@ import os.path
 import numpy as np
 from collections import OrderedDict
 
-MM_HEADER = '%%MatrixMarket matrix coordinate integer general\n%metadata_json: {"format_version": 2, "software_version": "1.1.0"}'
+from .constants import MM_HEADER, MTX_SUFFIX, CELLS_SUFFIX, REGIONS_SUFFIX
 
 def make_count_matrix(data: dict, output: str, merged_bed: str = "../data/merged_bed.bed") -> None:
     """Makes a count matrix given pairs of suitable peak calls and read data
@@ -58,7 +58,7 @@ def make_count_matrix(data: dict, output: str, merged_bed: str = "../data/merged
             cell_idx = cell_reference[cell]
             reads = len([i for i in bams[cell].fetch(row["chrom"], int(row["start"]), int(row["end"]))])
             peak_length = int(row["end"]) - int(row["start"])
-            entries.append([peak_idx, cell_idx, reads, peak_length / 1000])
+            entries.append([peak_idx+1, cell_idx+1, reads, peak_length / 1000])
 
 
     # Don't keep the connections open longer than I need them
@@ -92,20 +92,20 @@ def make_count_matrix(data: dict, output: str, merged_bed: str = "../data/merged
     # Sort the resulting matrix by peak index
     final = final[final[:, 0].argsort()]
 
-    if os.path.isfile(f"{output}.mtx"):
-        os.remove(f"{output}.mtx")
+    if os.path.isfile(f"{output}{MTX_SUFFIX}"):
+        os.remove(f"{output}{MTX_SUFFIX}")
 
     # Write out the file
-    with open(f"{output}.mtx", 'a') as mtx:
+    with open(f"{output}{MTX_SUFFIX}", 'a') as mtx:
         mtx.write(MM_HEADER + "\n")
-        mtx.write(f"{merge.shape[0]} {len(data.keys())} {np.sum(final[:, 2])}\n")
+        mtx.write(f"{merge.shape[0]} {len(data.keys())} {int(np.sum(final[:, 2]))}\n")
         np.savetxt(mtx, final.astype(int), fmt = '%i', delimiter = " ")
 
-    with open(f"{output}.peaks", 'w') as peaks_out:
+    with open(f"{output}{REGIONS_SUFFIX}", 'w') as peaks_out:
         for i, row in merge.iterrows():
             peaks_out.write(f"{row.chrom}:{row.start}-{row.end}\n")
     
-    with open(f"{output}.cells", 'w') as cells_out:
+    with open(f"{output}{CELLS_SUFFIX}", 'w') as cells_out:
         for cell in cell_reference.keys():
             cells_out.write(cell + "\n")
 
