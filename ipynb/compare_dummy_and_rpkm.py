@@ -17,5 +17,5 @@ blah = {
 bl.cm.make_count_matrix(blah, output = "mtx/rpkm", dummy = False)
 bl.cm.make_count_matrix(blah, output = "mtx/dummy", dummy = True)
 
-bl.ct.optimise_cistopic_parameters("mtx/rpkm", output = "params/rpkm.yaml")
-bl.ct.optimise_cistopic_parameters("mtx/dummy", output = "params/dummy.yaml")
+bl.ct.optimise_cistopic_parameters("mtx/rpkm", output = "output/rpkm.yaml", n_iter = 20)
+bl.ct.optimise_cistopic_parameters("mtx/dummy", output = "output/dummy.yaml", n_iter = 20)

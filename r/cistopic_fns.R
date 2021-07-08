@@ -12,11 +12,11 @@ export_dr_cisTopic <- function(input_cisTopicObject, thrP, genome, request_inter
     write.table(df_region_topic,row.names = TRUE, col.names = TRUE, sep= "\t",file = out_path_region_topic)
 
     # export the entrez id for each region
-    library(TxDb.Hsapiens.UCSC.hg19.knownGene)
-    txdb <- TxDb.Hsapiens.UCSC.hg19.knownGene
-    library(org.Hs.eg.db)
-    cisTopicObject <- annotateRegions(cisTopicObject, txdb=txdb, annoDb='org.Hs.eg.db')
-    write(cisTopicObject@region.data$geneId, file = out_path_geneId)
+    #library(TxDb.Hsapiens.UCSC.hg19.knownGene)
+    #txdb <- TxDb.Hsapiens.UCSC.hg19.knownGene
+    #library(org.Hs.eg.db)
+    #cisTopicObject <- annotateRegions(cisTopicObject, txdb=txdb, annoDb='org.Hs.eg.db')
+    #write(cisTopicObject@region.data$geneId, file = out_path_geneId)
 
     # export BigWig files for observing the scored regions in the genome. (information on the length of the chromosomes has to be provided.)
     #library(TxDb.Hsapiens.UCSC.hg38.knownGene)
@@ -25,7 +25,7 @@ export_dr_cisTopic <- function(input_cisTopicObject, thrP, genome, request_inter
 	dir.create(out_path_BW)
         dir.create(out_path_Bed)
     } else{
-	getBigwigFiles(cisTopicObject, path=out_path_BW, seqlengths=seqlengths(txdb))
+	#getBigwigFiles(cisTopicObject, path=out_path_BW, seqlengths=seqlengths(txdb))
 	#select the most contributing regions to represent each topic
 	cisTopicObject <- binarizecisTopics(cisTopicObject, thrP=thrP, plot=FALSE)
     

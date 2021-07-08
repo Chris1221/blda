@@ -4,6 +4,7 @@ from bayes_opt import BayesianOptimization
 import os
 import yaml
 
+from .plots import create_topic_heatmap, region_scatterplot
 from .constants import MTX_SUFFIX, CELLS_SUFFIX, REGIONS_SUFFIX
 
 def run_cistopic(mtx_prefix: str = "notblah", alpha: float = 50, beta: float = 0.1, cores = 4, write_out = False, dir = None) -> float:
@@ -53,6 +54,7 @@ def run_cistopic(mtx_prefix: str = "notblah", alpha: float = 50, beta: float = 0
     )
 
     b = robjects.r(cistopic_script)
+    print("Ran first R")
 
     if write_out:
         
@@ -82,9 +84,10 @@ def run_cistopic(mtx_prefix: str = "notblah", alpha: float = 50, beta: float = 0
             f" test = FALSE)"
         )
         robjects.r(script) 
+        print("Ran second R")
 
         perp_cells = 1
-        perp_region = 50
+        perp_region = 10
         seed = 1
 
         clustering = (
@@ -93,19 +96,24 @@ def run_cistopic(mtx_prefix: str = "notblah", alpha: float = 50, beta: float = 0
             f"cell_topic <- as.data.frame(read.table('{dir}/cell-topic.tsv'))\n"
             f"region_topic <- as.data.frame(read.table('{dir}/region-topic.tsv'))\n"
             #f"cell_tsne <- run_tsne(cell_topic,seed=seed, check_duplicates = F, perplexity = {perp_cells})\n"
-            "cell_umap <- run_umap(cell_topic,seed=seed)\n"
+            #"cell_umap <- run_umap(cell_topic,seed=seed)\n"
             f"region_tsne <- run_tsne(region_topic,seed=seed,perplexity={perp_region},check_duplicates=F)\n"
-            f"cell_density <- density_clustering(input=cell_topic,seed=seed)\n"
-            "cell_louvain <- louvain_clustering(input=cell_topic,seed=seed,k=params$KNN)\n"
+            #f"cell_density <- density_clustering(input=cell_topic,seed=seed)\n"
+            #"cell_louvain <- louvain_clustering(input=cell_topic,seed=seed,k=5)\n"
             #"write_result(cbind(cell_tsne,cell_umap,cell_density,cell_louvain), '{dir}/cell_all.csv')\n"
+            f"write_result(cbind(region_topic, region_tsne), '{dir}/region_all.tsv')"
         )
 
         robjects.r(clustering)
+        print("Ran third R")
+
+        create_topic_heatmap(dir, f"{dir}/topic_heatmap.png")
+        region_scatterplot(dir, f"{dir}/region_plots")
 
     return (-b[1][0])
 
 
-def optimise_cistopic_parameters(mtx_prefix: str, output: str):
+def optimise_cistopic_parameters(mtx_prefix: str, output: str, n_iter: int = 10):
     os.environ['OPENBLAS_NUM_THREADS'] = '1'
 
     # Hacky but set the default based on the input parameter
@@ -126,7 +134,7 @@ def optimise_cistopic_parameters(mtx_prefix: str, output: str):
 
     optimizer.maximize(
         init_points=5,
-        n_iter=3,
+        n_iter=n_iter,
     )
 
     data = {
