@@ -5,11 +5,11 @@ import pandas as pd
 import os
 import os.path
 import numpy as np
-from collections import OrderedDict
+from pdb import set_trace
 
 from .constants import MM_HEADER, MTX_SUFFIX, CELLS_SUFFIX, REGIONS_SUFFIX
 
-def make_count_matrix(data: dict, output: str, merged_bed: str = "../data/merged_bed.bed") -> None:
+def make_count_matrix(data: dict, output: str, merged_bed: str = "../data/merged_bed.bed", dummy = False, norm = "rpkm") -> None:
     """Makes a count matrix given pairs of suitable peak calls and read data
     along with a normalisation method.
 
@@ -39,58 +39,72 @@ def make_count_matrix(data: dict, output: str, merged_bed: str = "../data/merged
     
     merge = pybedtools.BedTool(merged_bed).sort().merge(c=11,o = "collapse").to_dataframe()
 
-    # Loop through each of the peak entries and 
-    #   1. figure out which files we have to look at
-    #   2. find the read coverage under the peak 
-    #   3. Add the entry as (peak index, cell index, read coverage)
-    #       TODO: Need to discretise the read coverage somehow.
-    #       Just use a list as apparently it is much faster
+    if dummy: 
+        cell_reference = {k: i for i, k in enumerate(corrected_data.keys())}
+        entries = []
+        for peak_idx, row in merge.iterrows():
+            cells = row['name'].split(",")
+            for cell in cells:
+                cell_idx = cell_reference[cell]
+                reads = 1 
+                entries.append([peak_idx+1, cell_idx+1, reads])
+        
+        final = np.array(entries)
+    else: 
+        # Loop through each of the peak entries and 
+        #   1. figure out which files we have to look at
+        #   2. find the read coverage under the peak 
+        #   3. Add the entry as (peak index, cell index, read coverage)
+        #       TODO: Need to discretise the read coverage somehow.
+        #       Just use a list as apparently it is much faster
 
-    # Open the bam files
-    bams = {k: ps.AlignmentFile(v, "rb") for k, v in corrected_data.items()}
+        # Open the bam files
+        bams = {k: ps.AlignmentFile(v, "rb") for k, v in corrected_data.items()}
 
-    # Starting with 0 here
-    cell_reference = {k: i for i, k in enumerate(corrected_data.keys())}
-    entries = []
-    for peak_idx, row in merge.iterrows():
-        cells = row['name'].split(",")
-        for cell in cells:
-            cell_idx = cell_reference[cell]
-            reads = len([i for i in bams[cell].fetch(row["chrom"], int(row["start"]), int(row["end"]))])
-            peak_length = int(row["end"]) - int(row["start"])
-            entries.append([peak_idx+1, cell_idx+1, reads, peak_length / 1000])
+        # Starting with 0 here
+        cell_reference = {k: i for i, k in enumerate(corrected_data.keys())}
+        entries = []
+        for peak_idx, row in merge.iterrows():
+            cells = row['name'].split(",")
+            for cell in cells:
+                cell_idx = cell_reference[cell]
+                reads = len([i for i in bams[cell].fetch(row["chrom"], int(row["start"]), int(row["end"]))])
+                peak_length = int(row["end"]) - int(row["start"])
+                entries.append([peak_idx+1, cell_idx+1, reads, peak_length / 1000])
 
 
-    # Don't keep the connections open longer than I need them
-    for key, bam in bams.items():
-        bam.close()
+        # Don't keep the connections open longer than I need them
+        for key, bam in bams.items():
+            bam.close()
 
-    entries_np = np.array(entries)
+        entries_np = np.array(entries)
 
-    # Find all of the individual entries and split them up
-    first = True
-    for key, value in cell_reference.items():
-        # Find where the condition is met
-        # Need to normalise by
-        #       total reads in the library
-        #       length of the peak
-        #
-        # but they need to be an integer at the end of the day, 
-        # so there needs to be some kind of transformation back to this.
-        # what about quintiles? or something
-        subset = entries_np[entries_np[:, 1] == value]
-        total_m_reads = np.sum(subset[:, 2]) / 1e6  
-        subset[:, 2] = np.round(subset[:, 2] / subset[:, 3] / total_m_reads)
-        subset = subset[:, 0:3]
+        # Find all of the individual entries and split them up
+        first = True
+        for key, value in cell_reference.items():
+            # Find where the condition is met
+            # Need to normalise by
+            #       total reads in the library
+            #       length of the peak
+            #
+            # but they need to be an integer at the end of the day, 
+            # so there needs to be some kind of transformation back to this.
+            # what about quintiles? or something
+            
+            assert norm.lower() == "rpkm", "Only RPKM is currently implemented."
+            subset = entries_np[entries_np[:, 1] == value+1]
+            total_m_reads = np.sum(subset[:, 2]) / 1e6  
+            subset[:, 2] = np.round(subset[:, 2] / subset[:, 3] / total_m_reads)
+            subset = subset[:, 0:3]
 
-        if first: 
-            final = subset 
-            first = False
-        else:
-            final = np.vstack((final, subset))
+            if first: 
+                final = subset 
+                first = False
+            else:
+                final = np.vstack((final, subset))
 
-    # Sort the resulting matrix by peak index
-    final = final[final[:, 0].argsort()]
+        # Sort the resulting matrix by peak index
+        final = final[final[:, 0].argsort()]
 
     if os.path.isfile(f"{output}{MTX_SUFFIX}"):
         os.remove(f"{output}{MTX_SUFFIX}")
@@ -108,6 +122,15 @@ def make_count_matrix(data: dict, output: str, merged_bed: str = "../data/merged
     with open(f"{output}{CELLS_SUFFIX}", 'w') as cells_out:
         for cell in cell_reference.keys():
             cells_out.write(cell + "\n")
+
+def _make_dummy_count_matrix(data: dict, output: str, merged_bed: str = "../data/merged_bed.bed"):
+    """Make a dummy count matrix with just 1s as the entries like we've always been doing. 
+
+    Args:
+        data (dict): Dict with keys as peak files. Values can be empty.
+        output (str): Output path.
+        merged_bed (str, optional): [description]. Defaults to "../data/merged_bed.bed".
+    """
 
 
 def append_file_names_to_bed(bed: str) -> str:

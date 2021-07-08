@@ -42,6 +42,10 @@ blah = {
     '../data/peaks/C4/C4_peaks.narrowPeak': "../data/C4.bam",
 }
 
-bl.cm.make_count_matrix(blah, output = "blah")
+prefix = "blah"
+
+bl.cm.make_count_matrix(blah, output = prefix, dummy = False)
 # %%
-bl.ct.run_cistopic("blah")
+#bl.ct.run_cistopic(prefix)
+
+bl.ct.optimise_cistopic_parameters(prefix, output = "blah.yaml")
