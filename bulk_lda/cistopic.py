@@ -27,6 +27,8 @@ def run_cistopic(mtx_prefix: str = "notblah", alpha: float = 50, beta: float = 0
         "library(cisTopic)\n"
         "library(Matrix)\n"
         "library(dplyr)\n"
+        "print(R.home())\n"
+        "find.package('cisTopic')\n"
         "options(device=pdf)\n"
         f"countMatrix <- readMM('{mtx}')\n"
         f"colnames(countMatrix) <- read.csv('{cells}',header=F)$V1\n"
@@ -45,8 +47,8 @@ def run_cistopic(mtx_prefix: str = "notblah", alpha: float = 50, beta: float = 0
         "alphaByTopic = TRUE\n"
         "iterations = 3000\n"
 
-        "cisTopicObject <- runWarpLDAModels(cisTopicObject, topic=topic, seed=1, alpha=alpha, alphaByTopic=alphaByTopic, beta=beta,"
-        f"nCores={cores}, iterations=iterations, addModels=TRUE)\n"
+        "cisTopicObject <- runWarpLDAModels(cisTopicObject, topic=topic, seed=1, alpha=alpha, alphaByTopic=TRUE, beta=beta,"
+        f"nCores={cores}, iterations=3000, addModels=TRUE)\n"
         "cisTopicObject <- selectModel(cisTopicObject, type='derivative',plot=FALSE)\n"
 
         #"numTopics <- dim(cisTopicObject@selected.model$document_expects)[1]\n"
@@ -99,7 +101,7 @@ def run_cistopic(mtx_prefix: str = "notblah", alpha: float = 50, beta: float = 0
             #"cell_umap <- run_umap(cell_topic,seed=seed)\n"
             f"region_tsne <- run_tsne(region_topic,seed=seed,perplexity={perp_region},check_duplicates=F)\n"
             #f"cell_density <- density_clustering(input=cell_topic,seed=seed)\n"
-            #"cell_louvain <- louvain_clustering(input=cell_topic,seed=seed,k=5)\n"
+            #"cell_louvain <- louvain_clustering(input=cell_topic,seed=seed,k=15)\n"
             #"write_result(cbind(cell_tsne,cell_umap,cell_density,cell_louvain), '{dir}/cell_all.csv')\n"
             f"write_result(cbind(region_topic, region_tsne), '{dir}/region_all.tsv')"
         )
@@ -138,13 +140,12 @@ def optimise_cistopic_parameters(mtx_prefix: str, output: str, n_iter: int = 10)
     )
 
     data = {
-        "max": optimizer.max,
-        "res": optimizer.res 
+        "max": optimizer.max['params']
     }
 
     # Dump the parameters.
     with open(output, 'w') as o:
-        yaml.dump(data)
+        yaml.dump(data, o)
 
     # And dump the results
     run_cistopic(**optimizer.max['params'], dir = output.replace(".yaml", ""), write_out=True, cores = 2)

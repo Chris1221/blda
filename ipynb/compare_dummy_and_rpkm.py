@@ -14,8 +14,8 @@ blah = {
     '../data/peaks/C4/C4_peaks.narrowPeak': "../data/C4.bam",
 }
 
-bl.cm.make_count_matrix(blah, output = "mtx/rpkm", dummy = False)
-bl.cm.make_count_matrix(blah, output = "mtx/dummy", dummy = True)
+bl.cm.make_count_matrix(blah, output = "mtx/rpkm_new", dummy = False)
+bl.cm.make_count_matrix(blah, output = "mtx/dummy_new", dummy = True)
 
-bl.ct.optimise_cistopic_parameters("mtx/rpkm", output = "output/rpkm.yaml", n_iter = 20)
-bl.ct.optimise_cistopic_parameters("mtx/dummy", output = "output/dummy.yaml", n_iter = 20)
+bl.ct.optimise_cistopic_parameters("mtx/rpkm_new", output = "output/rpkm_new.yaml", n_iter = 100)
+bl.ct.optimise_cistopic_parameters("mtx/dummy_new", output = "output/dummy_new.yaml", n_iter = 100)

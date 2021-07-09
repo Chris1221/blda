@@ -17,8 +17,6 @@ def region_scatterplot(dir: str, output_dir: str):
     df = pd.read_csv(f"{dir}/region_all.tsv", sep = "\t", index_col = 0)
     other_cols = [i for i in df.columns if not i.startswith("tSNE")]
 
-    set_trace()
-
     mkdir(output_dir)
 
     for i in other_cols:
@@ -28,4 +26,4 @@ def region_scatterplot(dir: str, output_dir: str):
 
 def mkdir(dir: str):
     if not os.path.exists(dir):
-        os.mkdir(dir)
+        os.makedirs(dir)

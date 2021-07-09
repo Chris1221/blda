@@ -25,9 +25,13 @@ def make_count_matrix(data: dict, output: str, merged_bed: str = "../data/merged
     # Read in all the keys as pybedtools instances
     corrected_data = {}
     for peak, bam in data.items():
-        new_peak = append_file_names_to_bed(peak)
-        corrected_data[new_peak] = bam
-
+        try:
+            new_peak = append_file_names_to_bed(peak)
+            corrected_data[new_peak] = bam
+        except pd.errors.EmptyDataError:
+            # It's okay if there's an empty peak file
+            pass
+ 
     if not os.path.isfile(merged_bed):
         # Shove all the bed files together into a single one 
         # so that we can merge it 
@@ -91,11 +95,16 @@ def make_count_matrix(data: dict, output: str, merged_bed: str = "../data/merged
             # so there needs to be some kind of transformation back to this.
             # what about quintiles? or something
             
-            assert norm.lower() == "rpkm", "Only RPKM is currently implemented."
+            
             subset = entries_np[entries_np[:, 1] == value+1]
-            total_m_reads = np.sum(subset[:, 2]) / 1e6  
-            subset[:, 2] = np.round(subset[:, 2] / subset[:, 3] / total_m_reads)
-            subset = subset[:, 0:3]
+            
+            if norm.lower() == "rpkm":
+                total_m_reads = np.sum(subset[:, 2]) / 1e6  
+                subset[:, 2] = np.round(subset[:, 2] / subset[:, 3] / total_m_reads)
+                subset = subset[:, 0:3]
+            elif norm.lower() == "none":
+                subset = subset[:, 0:3]
+
 
             if first: 
                 final = subset 
@@ -123,14 +132,6 @@ def make_count_matrix(data: dict, output: str, merged_bed: str = "../data/merged
         for cell in cell_reference.keys():
             cells_out.write(cell + "\n")
 
-def _make_dummy_count_matrix(data: dict, output: str, merged_bed: str = "../data/merged_bed.bed"):
-    """Make a dummy count matrix with just 1s as the entries like we've always been doing. 
-
-    Args:
-        data (dict): Dict with keys as peak files. Values can be empty.
-        output (str): Output path.
-        merged_bed (str, optional): [description]. Defaults to "../data/merged_bed.bed".
-    """
 
 
 def append_file_names_to_bed(bed: str) -> str:

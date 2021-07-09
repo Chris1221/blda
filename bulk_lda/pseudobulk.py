@@ -2,6 +2,8 @@ import pysam as ps
 import os
 import tqdm as tqdm
 
+from .plots import mkdir
+
 def pb_bam(bam_path: str, mapping: dict, output_prefix: str = "") -> None:
     """Pseudobulk a single cell ATAC-seq experiment using a pre-defined mapping criteria. 
 
@@ -79,3 +81,26 @@ def check_output_prefix(prefix: str) -> str:
         return prefix[:-1]
     else:
         return prefix
+
+
+def split_bam(big_bam: str, prefix: str):
+
+    bams = {}
+
+    mkdir(prefix)
+
+    raw = ps.AlignmentFile(big_bam, "rb")
+    for read in tqdm.tqdm(raw):
+        tag = read.get_tag("CB")
+        if tag not in bams:
+            bams[tag] = ps.AlignmentFile(f"{prefix}/{tag}.bam", 'wb', template = raw) 
+        
+        bams[tag].write(read)
+        
+
+    for tag, bam in bams.items():
+        bam.close()
+        os.system(f"samtools index {prefix}/{tag}.bam")
+        
+
+    raw.close()
