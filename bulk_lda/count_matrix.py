@@ -6,14 +6,16 @@ import os
 import os.path
 import numpy as np
 from pdb import set_trace
+import pyBigWig
 
 from .constants import MM_HEADER, MTX_SUFFIX, CELLS_SUFFIX, REGIONS_SUFFIX
 
-def make_count_matrix(data: dict, output: str, merged_bed: str = "../data/merged_bed.bed", dummy = False, norm = "rpkm") -> None:
+def make_count_matrix(data: dict, output: str, merged_bed: str = "../data/merged_bed.bed", type = "dummy", norm = "rpkm") -> None:
     """Makes a count matrix given pairs of suitable peak calls and read data
     along with a normalisation method.
 
-    TODO: Do the normalisation later as this will require some experimentation.
+    Type can either be ["dummy", "bigwig", "bam"]
+
 
     Args:
         data (dict): Keys are peak files, values are their alignment files.
@@ -43,7 +45,7 @@ def make_count_matrix(data: dict, output: str, merged_bed: str = "../data/merged
     
     merge = pybedtools.BedTool(merged_bed).sort().merge(c=11,o = "collapse").to_dataframe()
 
-    if dummy: 
+    if type.lower() == "dummy": 
         cell_reference = {k: i for i, k in enumerate(corrected_data.keys())}
         entries = []
         for peak_idx, row in merge.iterrows():
@@ -54,6 +56,26 @@ def make_count_matrix(data: dict, output: str, merged_bed: str = "../data/merged
                 entries.append([peak_idx+1, cell_idx+1, reads])
         
         final = np.array(entries)
+    elif type.lower == "bigwig":
+        tracks = {k: pyBigWig.open(v) for k, v in corrected_data.items()} 
+
+        # Make sure they are all valid coverage tracks
+        assert all([v.isBigWig() for k, v in tracks])
+
+        cell_reference = {k: i for i, k in enumerate(corrected_data.keys())}
+        entries = []
+        for peak_idx, row in merge.iterrows():
+            cells = row['name'].split(",")
+            for cell in cells:
+                cell_idx = cell_reference[cell]
+                reads = len([i for i in tracks[cell].stats(row["chrom"], int(row["start"]), int(row["end"]))])
+                peak_length = int(row["end"]) - int(row["start"])
+                entries.append([peak_idx+1, cell_idx+1, reads, peak_length / 1000])
+
+        final = np.array(entries)
+
+
+
     else: 
         # Loop through each of the peak entries and 
         #   1. figure out which files we have to look at
@@ -112,8 +134,8 @@ def make_count_matrix(data: dict, output: str, merged_bed: str = "../data/merged
             else:
                 final = np.vstack((final, subset))
 
-        # Sort the resulting matrix by peak index
-        final = final[final[:, 0].argsort()]
+    # Sort the resulting matrix by peak index
+    final = final[final[:, 0].argsort()]
 
     if os.path.isfile(f"{output}{MTX_SUFFIX}"):
         os.remove(f"{output}{MTX_SUFFIX}")
