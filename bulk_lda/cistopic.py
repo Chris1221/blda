@@ -1,13 +1,24 @@
 import rpy2
 import rpy2.robjects as robjects
 from bayes_opt import BayesianOptimization
+from bayes_opt.logger import JSONLogger
+from bayes_opt.event import Events
+
+from pkg_resources import resource_filename as static
+
 import os
 import yaml
+
+import pandas as pd
+
+import dask
+from dask_jobqueue import SGECluster
+from distributed import Client
 
 from .plots import create_topic_heatmap, region_scatterplot
 from .constants import MTX_SUFFIX, CELLS_SUFFIX, REGIONS_SUFFIX
 
-def run_cistopic(mtx_prefix: str = "notblah", alpha: float = 50, beta: float = 0.1, cores = 4, write_out = False, dir = None) -> float:
+def run_cistopic(mtx_prefix: str = "notblah", alpha: float = 50, beta: float = 0.1, cores = 1, write_out = False, dir = None) -> float:
     """Runs cisTopic on a count matrix. Returns log likelihood of best model.
 
     Args:
@@ -70,7 +81,7 @@ def run_cistopic(mtx_prefix: str = "notblah", alpha: float = 50, beta: float = 0
              os.mkdir(f"{dir}/selectedregion-topic_Bed")
 
         script = (
-            "source('../r/cistopic_fns.R')\n"
+            f"source('{static('bulk_lda.r', 'cistopic_fns.R')}')\n"
             "export_dr_cisTopic(cisTopicObject,\n"
             " thrP=0.99,\n"
             " genome='hg19',\n"
@@ -93,17 +104,18 @@ def run_cistopic(mtx_prefix: str = "notblah", alpha: float = 50, beta: float = 0
         seed = 1
 
         clustering = (
-            "source('../r/clustering_helper.R')\n"
+            "source('{static('bulk_lda.r', 'clustering_helper.R')}')\n"
             f"seed = {seed}\n"
             f"cell_topic <- as.data.frame(read.table('{dir}/cell-topic.tsv'))\n"
             f"region_topic <- as.data.frame(read.table('{dir}/region-topic.tsv'))\n"
-            #f"cell_tsne <- run_tsne(cell_topic,seed=seed, check_duplicates = F, perplexity = {perp_cells})\n"
+            f"cell_tsne <- run_tsne(cell_topic,seed=seed, check_duplicates = F, perplexity = {perp_cells})\n"
             #"cell_umap <- run_umap(cell_topic,seed=seed)\n"
             f"region_tsne <- run_tsne(region_topic,seed=seed,perplexity={perp_region},check_duplicates=F)\n"
             #f"cell_density <- density_clustering(input=cell_topic,seed=seed)\n"
             #"cell_louvain <- louvain_clustering(input=cell_topic,seed=seed,k=15)\n"
-            #"write_result(cbind(cell_tsne,cell_umap,cell_density,cell_louvain), '{dir}/cell_all.csv')\n"
+            f"write_result(cbind(cell_tsne), '{dir}/cell_all.csv')\n"
             f"write_result(cbind(region_topic, region_tsne), '{dir}/region_all.tsv')"
+            #f"write_result(cbind(region_topic), '{dir}/region_all.tsv')"
         )
 
         robjects.r(clustering)
@@ -128,24 +140,58 @@ def optimise_cistopic_parameters(mtx_prefix: str, output: str, n_iter: int = 10)
         'beta': [0.0001, 0.9999]
     }
 
+    
     optimizer = BayesianOptimization(
         f=run_cistopic,
         pbounds=p_dict,
         random_state=1,
     )
+    
+    logger = JSONLogger(path=output)
+    optimizer.subscribe(Events.OPTIMIZATION_STEP, logger)
 
     optimizer.maximize(
         init_points=5,
         n_iter=n_iter,
     )
 
-    data = {
-        "max": optimizer.max['params']
-    }
+    df = pd.DataFrame(optimizer.space.params)
+    df['target'] = optimizer.space.target
+
+    df.to_csv(output, sep = "\t", header = False, index=False)
+
+
 
     # Dump the parameters.
-    with open(output, 'w') as o:
-        yaml.dump(data, o)
+    #with open(output, 'w') as o:
+    #    yaml.dump(data, o)
 
     # And dump the results
-    run_cistopic(**optimizer.max['params'], dir = output.replace(".yaml", ""), write_out=True, cores = 2)
+    run_cistopic(**optimizer.max['params'], dir = output.replace(".csv", ""), write_out=True, cores = 2)
+
+def optimise_cistopic_dask(mtx_prefix: str, output: str, n_iter: int = 10):
+    cluster = SGECluster(queue = 'short.qc', project = 'lunter.prjc', cores = 1, memory = "8GB", death_timeout = 600)
+    cluster.scale(10)
+
+    print(cluster.job_script())
+
+    client = Client(cluster)
+    
+    
+    p_dict = {
+        'alpha': range(10, 490, 20),
+        'beta': [i / 100 for i in range(1, 99, 14)]
+    }
+
+    lls = []
+    for a in p_dict['alpha'][0:3]:
+        for b in p_dict["beta"][0:3]:
+            ll = dask.delayed(run_cistopic)(mtx_prefix=mtx_prefix, alpha=a, beta = b)
+            lls.append(ll)
+
+    all = dask.delayed(list)(lls).compute()
+    print("done")
+    
+
+    # And dump the results
+    #run_cistopic(**optimizer.max['params'], dir = output.replace(".yaml", ""), write_out=True, cores = 2)

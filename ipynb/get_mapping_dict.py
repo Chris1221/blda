@@ -44,10 +44,10 @@ blah = {
 
 prefix = "blah"
 
-#bl.cm.make_count_matrix(blah, output = prefix, dummy = False)
+#bl.cm.make_count_matrix(blah, output = prefix, format = "dummy")
 # %%
 #bl.ct.run_cistopic(prefix)
 
-#bl.ct.optimise_cistopic_parameters(prefix, output = "blah.yaml")
+bl.ct.optimise_cistopic_dask(prefix, output = "blah.yaml")
 
-bl.ct.run_cistopic(mtx_prefix = "blah", alpha = 10, beta = 0.1, dir = "blah", write_out=True, cores = 2)
+#bl.ct.run_cistopic(mtx_prefix = "blah", alpha = 10, beta = 0.1, dir = "blah", write_out=True, cores = 2)
