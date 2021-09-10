@@ -18,7 +18,15 @@ from distributed import Client
 from .plots import create_topic_heatmap, region_scatterplot
 from .constants import MTX_SUFFIX, CELLS_SUFFIX, REGIONS_SUFFIX
 
-def run_cistopic(mtx_prefix: str = "notblah", alpha: float = 50, beta: float = 0.1, cores = 1, write_out = False, dir = None) -> float:
+def run_cistopic(
+    mtx_prefix: str = "notblah",
+    alpha: float = 50,
+    beta: float = 0.1,
+    topic = 5,
+    cores = 1, 
+    seed = 1,
+    write_out = False, 
+    dir = None) -> float:
     """Runs cisTopic on a count matrix. Returns log likelihood of best model.
 
     Args:
@@ -52,18 +60,22 @@ def run_cistopic(mtx_prefix: str = "notblah", alpha: float = 50, beta: float = 0
 
         # parmeters
         #"topic <- c(2,4,8,10,12,14,16,18,20,22,24,26,28,30,40,50)\n"
-        "topic <- c(1,2,3,4,5,6,7,8)\n"
+        #"topic <- c(1,2,3,4,5,6,7,8)\n"
+        f"topic <- c({topic-1}, {topic}, {topic+1})\n"
         f"alpha = {alpha}\n"
         f"beta = {beta}\n"
         "alphaByTopic = TRUE\n"
         "iterations = 3000\n"
+        f"seed = {seed}\n"
 
-        "cisTopicObject <- runWarpLDAModels(cisTopicObject, topic=topic, seed=1, alpha=alpha, alphaByTopic=TRUE, beta=beta,"
+        "print('running models')\n"
+
+        f"cisTopicObject <- runWarpLDAModels(cisTopicObject, topic=c({topic}), seed=seed, alpha=alpha, alphaByTopic=TRUE, beta=beta,"
         f"nCores={cores}, iterations=3000, addModels=TRUE)\n"
-        "cisTopicObject <- selectModel(cisTopicObject, type='derivative',plot=FALSE)\n"
+        f"cisTopicObject <- selectModel(cisTopicObject, select = {topic},plot=FALSE, type = 'maximum')\n"
 
         #"numTopics <- dim(cisTopicObject@selected.model$document_expects)[1]\n"
-        "return(cisTopicObject@log.lik %>% dplyr::filter(second_derivative == max(second_derivative)))"
+        "return(cisTopicObject@log.lik)"
     )
 
     b = robjects.r(cistopic_script)
@@ -80,8 +92,9 @@ def run_cistopic(mtx_prefix: str = "notblah", alpha: float = 50, beta: float = 0
         if not os.path.exists(f"{dir}/region-topic_BW"):
              os.mkdir(f"{dir}/selectedregion-topic_Bed")
 
+        cistopic_fns = static('bulk_lda.r', 'cistopic_fns.R')
         script = (
-            f"source('{static('bulk_lda.r', 'cistopic_fns.R')}')\n"
+            f"source('{cistopic_fns}')\n"
             "export_dr_cisTopic(cisTopicObject,\n"
             " thrP=0.99,\n"
             " genome='hg19',\n"
@@ -101,10 +114,10 @@ def run_cistopic(mtx_prefix: str = "notblah", alpha: float = 50, beta: float = 0
 
         perp_cells = 1
         perp_region = 10
-        seed = 1
 
+        clustering_helper = static('bulk_lda.r', 'clustering_helper.R')
         clustering = (
-            "source('{static('bulk_lda.r', 'clustering_helper.R')}')\n"
+            f"source('{clustering_helper}')\n"
             f"seed = {seed}\n"
             f"cell_topic <- as.data.frame(read.table('{dir}/cell-topic.tsv'))\n"
             f"region_topic <- as.data.frame(read.table('{dir}/region-topic.tsv'))\n"
@@ -127,17 +140,18 @@ def run_cistopic(mtx_prefix: str = "notblah", alpha: float = 50, beta: float = 0
     return (-b[1][0])
 
 
-def optimise_cistopic_parameters(mtx_prefix: str, output: str, n_iter: int = 10):
+def optimise_cistopic_parameters(mtx_prefix: str, output: str, n_iter: int = 10, topics = 5):
     os.environ['OPENBLAS_NUM_THREADS'] = '1'
 
     # Hacky but set the default based on the input parameter
     defaults = [i for i in run_cistopic.__defaults__]
     defaults[0] = mtx_prefix
+    defaults[3] = topics
     run_cistopic.__defaults__ = tuple(defaults)
  
     p_dict = {
         'alpha': [10, 500],
-        'beta': [0.0001, 0.9999]
+        'beta': [0.0001, 0.9999],
     }
 
     

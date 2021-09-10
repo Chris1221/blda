@@ -20,8 +20,8 @@ for c in cov:
 
 
 #bl.ct.optimise_cistopic_parameters("../data/mll/mll_dummy", output = "mll_dummy.yaml")
-#bl.ct.optimise_cistopic_parameters("../data/mll/mll", output = "mll.yaml")
+bl.ct.optimise_cistopic_parameters("../data/mll/mll", output = "mll.yaml")
 
 
 #bl.ct.run_cistopic(mtx_prefix = "../data/mll/mll_dummy", alpha = 10, beta = 0.1, dir = "mll_dummy", write_out=True, cores = 2)
-bl.ct.run_cistopic(mtx_prefix = "../data/mll/mll", alpha = 10, beta = 0.1, dir = "mll", write_out=True, cores = 1)
+#bl.ct.run_cistopic(mtx_prefix = "../data/mll/mll", alpha = 10, beta = 0.1, dir = "mll", write_out=True, cores = 1)

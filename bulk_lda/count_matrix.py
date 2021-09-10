@@ -16,7 +16,7 @@ from tqdm import tqdm
 from .constants import MM_HEADER, MTX_SUFFIX, CELLS_SUFFIX, REGIONS_SUFFIX
 
 
-def make_count_matrix(data: dict, output: str, merged_bed: str = "../data/merged_bed.bed", format: str = "dummy", norm: str = "rpkm", force: bool = True) -> None:
+def make_count_matrix(data: dict, output: str, merged_bed: str = "../data/merged_bed.bed", format: str = "dummy", dummy = False, norm: str = "rpkm", force: bool = True) -> None:
     """Makes a count matrix.
 
     Args:
@@ -61,6 +61,7 @@ def make_count_matrix(data: dict, output: str, merged_bed: str = "../data/merged
 
         iter = tqdm(merge.iterrows(), total = len(merge.index), desc = "Writing dummy")
         for peak_idx, row in iter:
+            # You want this one to only use the relevant cells
             cells = row['name'].split(",")
             for cell in cells:
                 cell_idx = cell_reference[cell]
@@ -80,13 +81,18 @@ def make_count_matrix(data: dict, output: str, merged_bed: str = "../data/merged
 
         iter = tqdm(merge.iterrows(), total = len(merge.index), desc = "Writing Coverage")
         for peak_idx, row in iter:
-            cells = row['name'].split(",")
+            # want to get all of the cells not just the peak regions
+            #cells = row['name'].split(",")
+            cells = [i for i in cell_reference.keys()]
             for cell in cells:
                 cell_idx = cell_reference[cell]
-                reads = ceil(10*tracks[cell].stats(row["chrom"], int(row["start"]), int(row["end"]))[0])
-                peak_length = int(row["end"]) - int(row["start"])
-                entries.append([peak_idx+1, cell_idx+1, reads])
-
+                try:
+                    reads = ceil(10*tracks[cell].stats(row["chrom"], int(row["start"]), int(row["end"]))[0])
+                    peak_length = int(row["end"]) - int(row["start"])
+                    entries.append([peak_idx+1, cell_idx+1, reads])
+                except: # If anything goes wrong just let it happen and move on. Bad practice in general.
+                    pass
+                
         final = np.array(entries)
 
     elif format.lower() == "bam": 
@@ -104,7 +110,9 @@ def make_count_matrix(data: dict, output: str, merged_bed: str = "../data/merged
         cell_reference = {k: i for i, k in enumerate(corrected_data.keys())}
         entries = []
         for peak_idx, row in merge.iterrows():
-            cells = row['name'].split(",")
+            # new as of sept 7
+            #cells = row['name'].split(",")
+            cells = [i for i in cell_reference.keys()]
             for cell in cells:
                 cell_idx = cell_reference[cell]
                 reads = len([i for i in bams[cell].fetch(row["chrom"], int(row["start"]), int(row["end"]))])
@@ -153,7 +161,6 @@ def make_count_matrix(data: dict, output: str, merged_bed: str = "../data/merged
         #bams = {k: ps.AlignmentFile(v, "rb") for k, v in corrected_data.items()}
 
         bam = ps.AlignmentFile(list(corrected_data.values())[0], "rb")
-        entries = []
 
 
         #assert len(bams.keys()) == 1, "This is only for a merged SC bam file"
@@ -165,6 +172,10 @@ def make_count_matrix(data: dict, output: str, merged_bed: str = "../data/merged
         cell_reference = OrderedDict()
         regions = {}
 
+        #entries = pd.DataFrame()
+        entries = []
+        present = False
+        #first = True
 
         for n, region in tqdm(merge.iterrows(), total = merge.shape[0]): 
             #import pdb; pdb.set_trace()
@@ -184,9 +195,32 @@ def make_count_matrix(data: dict, output: str, merged_bed: str = "../data/merged
                 if cb not in cell_reference:
                     cell_reference[cb] = len(cell_reference)
 
+                #r2 = regions[r]+1
+                #c = cell_reference[cb]+1
+                # Check if the entry exists
+                #if not first:
+                #    present = entries.loc[(entries["0"] == 1) & (entries["1"] == 2)].shape[0]
+
+                #if present:
+                #   entries.loc[(entries["0"] == 1) & (entries["1"] == 1), "2"] += 1 
+                #else: 
+                #    entries = pd.concat([
+                #        entries, 
+                #        pd.DataFrame({"0": [r2], "1": [c], "2": [1]})
+                #    ])
+                #    if first: first = False
+                
+                #entries = np.vstack([entries, [regions[r]+1, cell_reference[cb]+1, 1]])
                 entries.append([regions[r]+1, cell_reference[cb]+1, 1])
-        
+
+
+        # Remove the first empty row
         final = np.array(entries)
+        unq, cnt = np.unique(final, return_counts = True, axis = 0)
+        if not dummy:
+            unq[:, 2] = cnt
+        final = unq
+
     
     else:
         raise NotImplementedError("This format is not yet supported. See the function definition for currently supported formats.")
