@@ -16,7 +16,15 @@ from tqdm import tqdm
 from .constants import MM_HEADER, MTX_SUFFIX, CELLS_SUFFIX, REGIONS_SUFFIX
 
 
-def make_count_matrix(data: dict, output: str, merged_bed: str = "../data/merged_bed.bed", format: str = "dummy", dummy = False, norm: str = "rpkm", force: bool = True) -> None:
+def make_count_matrix(
+    data: dict,
+    output: str,
+    merged_bed: str = "../data/merged_bed.bed",
+    format: str = "dummy",
+    dummy = False,
+    norm: str = "rpkm",
+    force: bool = True,
+) -> None:
     """Makes a count matrix.
 
     Args:
@@ -29,49 +37,53 @@ def make_count_matrix(data: dict, output: str, merged_bed: str = "../data/merged
     """
 
     if not force and os.path.isfile(f"{output}{MTX_SUFFIX}"):
-        print("The matrix file is already created so not doing anything. If you want to remake it, rerun this with the force option set to True.")
-        return(0)
+        print(
+            "The matrix file is already created so not doing anything. If you want to remake it, rerun this with the force option set to True."
+        )
+        return 0
 
     # First thing to do is to merge all of the peaks together and record
-    # which peaks correspond to what. 
+    # which peaks correspond to what.
     # Read in all the keys as pybedtools instances
     corrected_data = {}
     for peak, bam in data.items():
         try:
-            new_peak = append_file_names_to_bed(peak, force = force)
+            new_peak = append_file_names_to_bed(peak, force=force)
             corrected_data[new_peak] = bam
         except pd.errors.EmptyDataError:
             # It's okay if there's an empty peak file
             pass
- 
+
     if not os.path.isfile(merged_bed) or force:
-        # Shove all the bed files together into a single one 
-        # so that we can merge it 
-        with open(merged_bed, 'w') as o:
+        # Shove all the bed files together into a single one
+        # so that we can merge it
+        with open(merged_bed, "w") as o:
             for fname in corrected_data.keys():
                 with open(fname) as ifile:
                     for line in ifile:
                         o.write(line)
-    
-    merge = pybedtools.BedTool(merged_bed).sort().merge(c=4,o = "collapse").to_dataframe()
 
-    if format.lower() == "dummy": 
+    merge = (
+        pybedtools.BedTool(merged_bed).sort().merge(c=4, o="collapse").to_dataframe()
+    )
+
+    if format.lower() == "dummy":
         cell_reference = {k: i for i, k in enumerate(corrected_data.keys())}
         entries = []
 
-        iter = tqdm(merge.iterrows(), total = len(merge.index), desc = "Writing dummy")
+        iter = tqdm(merge.iterrows(), total=len(merge.index), desc="Writing dummy")
         for peak_idx, row in iter:
             # You want this one to only use the relevant cells
-            cells = row['name'].split(",")
+            cells = row["name"].split(",")
             for cell in cells:
                 cell_idx = cell_reference[cell]
-                reads = 1 
-                entries.append([peak_idx+1, cell_idx+1, reads])
-        
+                reads = 1
+                entries.append([peak_idx + 1, cell_idx + 1, reads])
+
         final = np.array(entries)
 
     elif format.lower() == "bigwig":
-        tracks = {k: pyBigWig.open(v) for k, v in corrected_data.items()} 
+        tracks = {k: pyBigWig.open(v) for k, v in corrected_data.items()}
 
         # Make sure they are all valid coverage tracks
         assert all([v.isBigWig() for k, v in tracks.items()])
@@ -79,26 +91,31 @@ def make_count_matrix(data: dict, output: str, merged_bed: str = "../data/merged
         cell_reference = {k: i for i, k in enumerate(corrected_data.keys())}
         entries = []
 
-        iter = tqdm(merge.iterrows(), total = len(merge.index), desc = "Writing Coverage")
+        iter = tqdm(merge.iterrows(), total=len(merge.index), desc="Writing Coverage")
         for peak_idx, row in iter:
             # want to get all of the cells not just the peak regions
-            #cells = row['name'].split(",")
+            # cells = row['name'].split(",")
             cells = [i for i in cell_reference.keys()]
             for cell in cells:
                 cell_idx = cell_reference[cell]
                 try:
-                    reads = ceil(10*tracks[cell].stats(row["chrom"], int(row["start"]), int(row["end"]))[0])
+                    reads = ceil(
+                        10
+                        * tracks[cell].stats(
+                            row["chrom"], int(row["start"]), int(row["end"])
+                        )[0]
+                    )
                     peak_length = int(row["end"]) - int(row["start"])
-                    entries.append([peak_idx+1, cell_idx+1, reads])
-                except: # If anything goes wrong just let it happen and move on. Bad practice in general.
+                    entries.append([peak_idx + 1, cell_idx + 1, reads])
+                except:  # If anything goes wrong just let it happen and move on. Bad practice in general.
                     pass
-                
+
         final = np.array(entries)
 
-    elif format.lower() == "bam": 
-        # Loop through each of the peak entries and 
+    elif format.lower() == "bam":
+        # Loop through each of the peak entries and
         #   1. figure out which files we have to look at
-        #   2. find the read coverage under the peak 
+        #   2. find the read coverage under the peak
         #   3. Add the entry as (peak index, cell index, read coverage)
         #       TODO: Need to discretise the read coverage somehow.
         #       Just use a list as apparently it is much faster
@@ -111,14 +128,20 @@ def make_count_matrix(data: dict, output: str, merged_bed: str = "../data/merged
         entries = []
         for peak_idx, row in merge.iterrows():
             # new as of sept 7
-            #cells = row['name'].split(",")
+            # cells = row['name'].split(",")
             cells = [i for i in cell_reference.keys()]
             for cell in cells:
                 cell_idx = cell_reference[cell]
-                reads = len([i for i in bams[cell].fetch(row["chrom"], int(row["start"]), int(row["end"]))])
+                reads = len(
+                    [
+                        i
+                        for i in bams[cell].fetch(
+                            row["chrom"], int(row["start"]), int(row["end"])
+                        )
+                    ]
+                )
                 peak_length = int(row["end"]) - int(row["start"])
-                entries.append([peak_idx+1, cell_idx+1, reads, peak_length / 1000])
-
+                entries.append([peak_idx + 1, cell_idx + 1, reads, peak_length / 1000])
 
         # Don't keep the connections open longer than I need them
         for key, bam in bams.items():
@@ -134,96 +157,93 @@ def make_count_matrix(data: dict, output: str, merged_bed: str = "../data/merged
             #       total reads in the library
             #       length of the peak
             #
-            # but they need to be an integer at the end of the day, 
+            # but they need to be an integer at the end of the day,
             # so there needs to be some kind of transformation back to this.
             # what about quintiles? or something
-            
-            
-            subset = entries_np[entries_np[:, 1] == value+1]
-            
+
+            subset = entries_np[entries_np[:, 1] == value + 1]
+
             if norm.lower() == "rpkm":
-                total_m_reads = np.sum(subset[:, 2]) / 1e6  
+                total_m_reads = np.sum(subset[:, 2]) / 1e6
                 subset[:, 2] = np.round(subset[:, 2] / subset[:, 3] / total_m_reads)
                 subset = subset[:, 0:3]
             elif norm.lower() == "none":
                 subset = subset[:, 0:3]
 
-
-            if first: 
-                final = subset 
+            if first:
+                final = subset
                 first = False
             else:
                 final = np.vstack((final, subset))
 
     elif format.lower() == "single_bam":
-        # I will still require a dictionary as the input type. 
+        # I will still require a dictionary as the input type.
         # Because I still do need the peaks plus the BAM file.
-        #bams = {k: ps.AlignmentFile(v, "rb") for k, v in corrected_data.items()}
+        # bams = {k: ps.AlignmentFile(v, "rb") for k, v in corrected_data.items()}
 
         bam = ps.AlignmentFile(list(corrected_data.values())[0], "rb")
 
+        # assert len(bams.keys()) == 1, "This is only for a merged SC bam file"
 
-        #assert len(bams.keys()) == 1, "This is only for a merged SC bam file"
-
-        #import pdb; pdb.set_trace()
+        # import pdb; pdb.set_trace()
 
         # Over write the one above but preserve the insertion order
         # so that the writing is the same later
         cell_reference = OrderedDict()
         regions = {}
 
-        #entries = pd.DataFrame()
+        # entries = pd.DataFrame()
         entries = []
         present = False
-        #first = True
+        # first = True
 
-        for n, region in tqdm(merge.iterrows(), total = merge.shape[0]): 
-            #import pdb; pdb.set_trace()
+        for n, region in tqdm(merge.iterrows(), total=merge.shape[0]):
+            # import pdb; pdb.set_trace()
             chrom = region["chrom"]
             start = int(region["start"])
             stop = int(region["end"])
             r = f"{chrom}:{start}-{stop}"
             if r not in regions:
-                    regions[r] = len(regions)
-                
+                regions[r] = len(regions)
+
             for read in bam.fetch(chrom, int(start), int(stop)):
                 if read.has_tag("CB"):
                     cb = read.get_tag("CB")
-                else: 
+                else:
                     continue
 
                 if cb not in cell_reference:
                     cell_reference[cb] = len(cell_reference)
 
-                #r2 = regions[r]+1
-                #c = cell_reference[cb]+1
+                # r2 = regions[r]+1
+                # c = cell_reference[cb]+1
                 # Check if the entry exists
-                #if not first:
+                # if not first:
                 #    present = entries.loc[(entries["0"] == 1) & (entries["1"] == 2)].shape[0]
 
-                #if present:
-                #   entries.loc[(entries["0"] == 1) & (entries["1"] == 1), "2"] += 1 
-                #else: 
+                # if present:
+                #   entries.loc[(entries["0"] == 1) & (entries["1"] == 1), "2"] += 1
+                # else:
                 #    entries = pd.concat([
-                #        entries, 
+                #        entries,
                 #        pd.DataFrame({"0": [r2], "1": [c], "2": [1]})
                 #    ])
                 #    if first: first = False
-                
-                #entries = np.vstack([entries, [regions[r]+1, cell_reference[cb]+1, 1]])
-                entries.append([regions[r]+1, cell_reference[cb]+1, 1])
 
+                # entries = np.vstack([entries, [regions[r]+1, cell_reference[cb]+1, 1]])
+                entries.append([regions[r] + 1, cell_reference[cb] + 1, 1])
 
         # Remove the first empty row
         final = np.array(entries)
-        unq, cnt = np.unique(final, return_counts = True, axis = 0)
+        unq, cnt = np.unique(final, return_counts=True, axis=0)
         if not dummy:
             unq[:, 2] = cnt
         final = unq
 
-    
     else:
-        raise NotImplementedError("This format is not yet supported. See the function definition for currently supported formats.")
+        raise NotImplementedError(
+            "This format is not yet supported. See the function definition for currently supported formats."
+        )
 
     # Sort the resulting matrix by peak index
     final = final[final[:, 0].argsort()]
@@ -232,44 +252,46 @@ def make_count_matrix(data: dict, output: str, merged_bed: str = "../data/merged
         os.remove(f"{output}{MTX_SUFFIX}")
 
     # Write out the file
-    with open(f"{output}{MTX_SUFFIX}", 'a') as mtx:
+    with open(f"{output}{MTX_SUFFIX}", "a") as mtx:
         mtx.write(MM_HEADER + "\n")
-        mtx.write(f"{merge.shape[0]} {len(np.unique(final[:, 1]))} {int(np.sum(final[:, 2]))}\n")
-        np.savetxt(mtx, final.astype(int), fmt = '%i', delimiter = " ")
+        mtx.write(
+            #f"{merge.shape[0]} {len(np.unique(final[:, 1]))} {int(np.sum(final[:, 2]))}\n"
+            f"{merge.shape[0]} {len(np.unique(final[:, 1]))} {int(final.shape[0])}\n" # this isn't actually the sum for other data formats
+        )
+        np.savetxt(mtx, final.astype(int), fmt="%i", delimiter=" ")
 
-    with open(f"{output}{REGIONS_SUFFIX}", 'w') as peaks_out:
+    with open(f"{output}{REGIONS_SUFFIX}", "w") as peaks_out:
         for i, row in merge.iterrows():
             peaks_out.write(f"{row.chrom}:{row.start}-{row.end}\n")
-    
-    with open(f"{output}{CELLS_SUFFIX}", 'w') as cells_out:
+
+    with open(f"{output}{CELLS_SUFFIX}", "w") as cells_out:
         for cell in cell_reference.keys():
             cells_out.write(cell + "\n")
-
 
 
 def append_file_names_to_bed(bed: str, force: bool = False) -> str:
     """Add file name annotation to bed file so that it can be collapsed.
 
     Does this as a side effect and returns the corrected file name
-    
+
     Args:
         bed (str): Path to bed file
         force (bool): Rewrite the file if it exists
     Returns:
         str: New file name
-    
+
     Side effects:
         Creates a new bed file with an additional column
     """
     if "narrowPeak" in bed:
-        new_file_name = bed.replace('.narrowPeak', '.new.bed')
+        new_file_name = bed.replace(".narrowPeak", ".new.bed")
     elif "bed" in bed:
-        new_file_name = bed.replace('.bed', '.new.bed')
+        new_file_name = bed.replace(".bed", ".new.bed")
     else:
-        new_file_name = bed + '.new'
+        new_file_name = bed + ".new"
 
     if not os.path.isfile(new_file_name) or force:
-        b = pd.read_csv(bed, sep = "\t", index_col = False).iloc[:, 0:3]
-        b['file'] = new_file_name 
-        b.to_csv(new_file_name, sep = "\t", header = False, index = False)
+        b = pd.read_csv(bed, sep="\t", index_col=False).iloc[:, 0:3]
+        b["file"] = new_file_name
+        b.to_csv(new_file_name, sep="\t", header=False, index=False)
     return new_file_name
