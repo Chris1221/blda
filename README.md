@@ -1,4 +1,3 @@
-# bulk_lda
+# `blda`
 
-Possible name:
-    bulk ATAC topic modelling (BATOMO) (BALDA?)
+A python package to perform latent dirichlet allocation (through cisTopic and `lda`) for bulk ATAC-seq experiments. Documentation is a work in progress.  
